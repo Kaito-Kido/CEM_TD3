@@ -144,7 +144,6 @@ def esrl_trainer_v3(
                 ) as t:
                     while t.n < t.total:
                         result = {}
-
                         while 'rew' not in result:
                             result = train_collector.collect(n_step=step_per_collect)
                             env_step += int(result["n/st"])
@@ -164,6 +163,7 @@ def esrl_trainer_v3(
                                     data[k] = f"{losses[k]:.3f}"
                                 logger.log_update_data(losses, gradient_step)
                                 t.set_postfix(**data)
+
                         t.update(1)
 
                     if t.n <= t.total:

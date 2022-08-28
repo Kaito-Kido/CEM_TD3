@@ -121,8 +121,11 @@ def trainer_v3(
     increase_update_yet = False
     best_actor_index = 0
     best_actor_params = None
+    total_update_step = 5000
 
     for epoch in range(1 + start_epoch, 1 + max_epoch):
+        sample_step = 0
+
         if env_step >= max_step:
             break
         if env_step >= 0.1 * max_step and not increase_update_yet:
@@ -140,6 +143,7 @@ def trainer_v3(
             result = train_collector.collect(n_episode=1)
             es_fitness[pop_ind] = int(result['rews'][0])
             env_step += int(result['n/st'])
+            sample_step += int(result['n/st'])
         prYellow(f'\nEnv Step: {env_step}')
         prGreen(f'ES fitness: {es_fitness}')
 
@@ -161,7 +165,7 @@ def trainer_v3(
                     #     env_step += int(result["n/st"])
                     #     actor_step += int(result["n/st"])
                     # logger.log_train_data(result, env_step)
-                    while actor_step <= 5000:
+                    while actor_step <= total_update_step:
                         data = {
                             "env_step": str(env_step),
                             "n/ep": str(int(t.n)),
@@ -186,11 +190,14 @@ def trainer_v3(
 
             actor_test_result = train_collector.collect(n_episode=1)
             env_step += actor_test_result['n/st']
+            sample_step += actor_test_result['n/st']
             actor_score = int(actor_test_result['rews'][0])
             prLightPurple(f'\tactor_test_result: {actor_test_result}')
 
             params[pop_ind] = get_params(policy.actor)
             es_fitness[pop_ind] = actor_score
+        
+        total_update_step = sample_step//2
         
         prRed(f'RL fitness: {es_fitness}')
         es.tell(params,es_fitness)

@@ -1,3 +1,4 @@
+from copy import deepcopy
 import time
 import tqdm
 import numpy as np
@@ -8,9 +9,13 @@ from esrl.util import *
 import torch
 
 from tianshou.data import Collector
-from tianshou.policy import BasePolicy
+from esrl.policy.base import BasePolicy
 from tianshou.trainer import test_episode, gather_info
 from tianshou.utils import tqdm_config, MovAvg, BaseLogger, LazyLogger
+
+
+
+
 
 
 def trainer_v3(
@@ -100,6 +105,8 @@ def trainer_v3(
     best_epoch = start_epoch
     best_reward, best_reward_std = test_result["rew"], test_result["rew_std"]
 
+    best_actor = deepcopy(policy)
+
     es = kwargs['es']
     pop_size = kwargs['pop_size']
     max_step = kwargs['max_step']
@@ -108,28 +115,33 @@ def trainer_v3(
     episode_per_epoch = kwargs['episode_per_epoch']
     df = pd.DataFrame(columns=["total_steps",
                                "mu_score", "mu_score_std",])
+    action_shape = kwargs['action_shape']
     mean_fitness = -9999
 
     increase_update_yet = False
+    best_actor_index = 0
+    best_actor_params = None
 
     for epoch in range(1 + start_epoch, 1 + max_epoch):
         if env_step >= max_step:
             break
-        # if env_step >= 0.1 * max_step and not increase_update_yet:
-        #     update_per_step += 1
-        #     increase_update_yet = True
+        if env_step >= 0.1 * max_step and not increase_update_yet:
+            update_per_step += 1
+            increase_update_yet = True
+        if best_actor_params is not None:
+            set_params(best_actor.actor, best_actor_params)
 
         params = es.ask(pop_size)
-        fitness = [0] * (pop_size)
+        es_fitness = [0] * (pop_size)
         # rl_fitness = [0] * (pop_size//2)
         for pop_ind in range(pop_size//2):
             set_params(policy.actor, params[pop_ind])
             policy.train()
             result = train_collector.collect(n_episode=1)
-            fitness[pop_ind] = int(result['rews'][0])
+            es_fitness[pop_ind] = int(result['rews'][0])
             env_step += int(result['n/st'])
         prYellow(f'\nEnv Step: {env_step}')
-        prGreen(f'ES fitness: {fitness}')
+        prGreen(f'ES fitness: {es_fitness}')
 
         # rl_params = np.zeros_like(params)
         for pop_ind in range(pop_size//2, pop_size):
@@ -138,47 +150,53 @@ def trainer_v3(
             policy.train()
             actor_step = 0
             actor_score = 0
-            if env_step>10000:
-                while actor_step < step_per_epoch:
-                    with tqdm.tqdm(
-                        total=episode_per_epoch, desc=f"Actor #{pop_ind}", **tqdm_config
-                    ) as t:
-                            while t.n < t.total:
-                                result = {}
-                                while 'rew' not in result:
-                                    result = train_collector.collect(n_step=step_per_collect)
-                                    env_step += int(result["n/st"])
-                                    actor_step += int(result["n/st"])
-                                    logger.log_train_data(result, env_step)
-                                    data = {
-                                        "env_step": str(env_step),
-                                        "n/ep": str(int(t.n)),
-                                        "n/st": str(actor_step),
-                                    }
-                                    for i in range(update_per_step):
-                                        gradient_step += 1
-                                        losses = policy.update(batch_size, train_collector.buffer)
-                                        for k in losses.keys():
-                                            stat[k].add(losses[k])
-                                            losses[k] = stat[k].get()
-                                            data[k] = f"{losses[k]:.3f}"
-                                        logger.log_update_data(losses, gradient_step)
-                                        t.set_postfix(**data)
-                                t.update(1)
+            # while actor_step < step_per_epoch:
+            with tqdm.tqdm(
+                total=episode_per_epoch, desc=f"Actor #{pop_ind}", **tqdm_config
+            ) as t:
+                while t.n < t.total:
+                    # result = {}
+                    # while 'rew' not in result:
+                    #     result = train_collector.collect(n_step=step_per_collect)
+                    #     env_step += int(result["n/st"])
+                    #     actor_step += int(result["n/st"])
+                    # logger.log_train_data(result, env_step)
+                    while actor_step <= 5000:
+                        data = {
+                            "env_step": str(env_step),
+                            "n/ep": str(int(t.n)),
+                            "n/st": str(actor_step),
+                        }
+                        for i in range(update_per_step):
+                            gradient_step += 1
+                            result = train_collector.collect(n_step=1)
+                            losses = policy.update(best_actor, action_shape, batch_size, train_collector.buffer)
+                            for k in losses.keys():
+                                stat[k].add(losses[k])
+                                losses[k] = stat[k].get()
+                                data[k] = f"{losses[k]:.3f}"
+                            logger.log_update_data(losses, gradient_step)
+                            t.set_postfix(**data)
 
-                            if t.n <= t.total:
-                                t.update()
+                        actor_step += 1
+                    t.update(1)
+
+                if t.n <= t.total:
+                    t.update()
 
             actor_test_result = train_collector.collect(n_episode=1)
             env_step += actor_test_result['n/st']
             actor_score = int(actor_test_result['rews'][0])
             prLightPurple(f'\tactor_test_result: {actor_test_result}')
 
-            # rl_params[pop_ind] = get_params(policy.actor)
-            fitness[pop_ind] = actor_score
+            params[pop_ind] = get_params(policy.actor)
+            es_fitness[pop_ind] = actor_score
         
-        prRed(f'RL fitness: {fitness}')
-        es.tell(params, fitness)
+        prRed(f'RL fitness: {es_fitness}')
+        es.tell(params,es_fitness)
+
+        best_actor_index = np.argmax(es_fitness)
+        best_actor_params = params[best_actor_index]
 
         
         set_params(policy.actor, es.mu)

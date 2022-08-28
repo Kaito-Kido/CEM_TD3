@@ -17,7 +17,7 @@ from esrl.esrl_trainer_v3 import esrl_trainer_v3
 from esrl.trainer_v3 import trainer_v3
 from esrl.ES import sepCEM, Control
 
-from tianshou.policy import TD3Policy
+from esrl.policy.td3 import P3STD3Policy
 from tianshou.exploration import GaussianNoise
 from tianshou.utils import BasicLogger
 from tianshou.env import SubprocVectorEnv
@@ -49,7 +49,7 @@ def get_args():
 
     parser.add_argument("--start-timesteps", type=int, default=25000)
     parser.add_argument('--epoch', type=int, default=200)
-    parser.add_argument('--step-per-epoch', type=int, default=1000)
+    parser.add_argument('--step-per-epoch', type=int, default=5000)
     parser.add_argument('--step-per-collect', type=int, default=1)
     parser.add_argument('--update-per-step', type=int, default=1)
     parser.add_argument('--n-step', type=int, default=1)
@@ -131,7 +131,7 @@ def test_td3(args=get_args()):
     #     alpha_optim = torch.optim.Adam([log_alpha], lr=args.alpha_lr)
     #     args.alpha = (target_entropy, log_alpha, alpha_optim)
 
-    policy = TD3Policy(
+    policy = P3STD3Policy(
         actor, actor_optim, critic1, critic1_optim, critic2, critic2_optim,
         tau=args.tau, gamma=args.gamma, exploration_noise=GaussianNoise(sigma=args.exploration_noise),
         policy_noise=args.policy_noise,
@@ -172,7 +172,7 @@ def test_td3(args=get_args()):
             update_per_step=args.update_per_step, test_in_train=False,
             pop_size=args.pop_size, n_grad=args.n_grad, actor_lr=args.actor_lr,
             max_step=args.max_step, start_step=args.start_step, es=es, 
-            log_path=log_path, episode_per_epoch=args.episode_per_epoch)
+            log_path=log_path, episode_per_epoch=args.episode_per_epoch, action_shape = args.action_shape)
         pprint.pprint(result)
 
     # Let's watch its performance!

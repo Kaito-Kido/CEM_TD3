@@ -10,11 +10,13 @@ from esrl.policy.ddpg import DDPGPolicy
 from torch.distributions.kl import kl_divergence
 from torch.distributions import Normal
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 def kl(mean1, std1, mean2, std2):
         distribution1   = Normal(mean1, std1)
         distribution2   = Normal(mean2, std2)
 
-        return kl_divergence(distribution1, distribution2).float().to('cpu')
+        return kl_divergence(distribution1, distribution2).float().to(device)
 
 
 class P3STD3Policy(DDPGPolicy):
@@ -126,7 +128,7 @@ class P3STD3Policy(DDPGPolicy):
 
         dist = self(batch).act
         best_dist = best_actor(batch).act
-        std = torch.ones([1, action_shape[0]]).float().to('cpu')
+        std = torch.ones([1, action_shape[0]]).float().to(device)
         KL = kl(best_dist, std, dist, std)
 
         # actor

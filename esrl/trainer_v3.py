@@ -170,6 +170,7 @@ def trainer_v3(
                         for i in range(update_per_step):
                             gradient_step += 1
                             result = train_collector.collect(n_step=1)
+                            env_step += int(result["n/st"])
                             losses = policy.update(best_actor, action_shape, batch_size, train_collector.buffer)
                             for k in losses.keys():
                                 stat[k].add(losses[k])

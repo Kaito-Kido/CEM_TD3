@@ -161,10 +161,10 @@ def trainer_v3(
                 while t.n < t.total:
                     result = {}
                     while actor_step <= total_update_step:
-                        result = train_collector.collect(n_step=step_per_collect)
-                        env_step += int(result["n/st"])
-                        actor_step += int(result["n/st"])
-                        logger.log_train_data(result, env_step)
+                        # result = train_collector.collect(n_step=step_per_collect)
+                        # env_step += int(result["n/st"])
+                        # actor_step += int(result["n/st"])
+                        # logger.log_train_data(result, env_step)
                         data = {
                             "env_step": str(env_step),
                             "n/ep": str(int(t.n)),
@@ -179,7 +179,7 @@ def trainer_v3(
                                 data[k] = f"{losses[k]:.3f}"
                             logger.log_update_data(losses, gradient_step)
                             t.set_postfix(**data)
-
+                        actor_step += 1
                     t.update(1)
 
                 if t.n <= t.total:
